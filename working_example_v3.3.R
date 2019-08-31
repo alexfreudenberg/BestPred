@@ -1,0 +1,127 @@
+Rprof("Rprof.out",memory.profiling=TRUE)
+
+library(sommer)
+library(BGLR)
+
+################################################################################
+################################################################################
+#Functionsforthecalculationofthegenomicvarianceindifferentset-ups
+GenVarCur<-function(GRM,varg,eBLUP,eBLUPcov){
+n<-dim(GRM)[[1]]
+  V<-varg*sum(diag(GRM))/(n-1)#formula(8)
+  W<-V+sum(eBLUP^2)/(n-1)-sum(diag(eBLUPcov))/(n-1)
+  return(c(V,W))
+}
+GenVarBase_Ped<-function(PedMat,GRM,varg,eBLUP,eBLUPcov){
+  n<-dim(GRM)[[1]]
+  P<-diag(1,n,n)-matrix(1,n,n)/n #Equation(2)
+ # Q<-solve(chol(P))
+  
+   E<-eigen(PedMat)
+   Q<-E$vectors
+   D<-E$values
+  Ped.inv.halve<-Q%*%diag(1/sqrt(D),nrow(Q),nrow(Q))%*%t(Q)
+  B_b<-Ped.inv.halve%*%P%*%Ped.inv.halve #equation(16)
+  V<-varg*sum(diag(B_b%*%GRM))/(n-1)#formula(17)
+  W<-V+t(eBLUP)%*%B_b%*%eBLUP/
+    (n-1)-sum(diag(B_b%*%eBLUPcov))/(n-1)#formula(18)
+  return(c(V,W))
+}
+GenVarBase_GRM<-function(GRM,phenos,mu,varg,eBLUP,eBLUPcov,vare){
+  n<-dim(GRM)[[1]]
+  P<-diag(1,n,n)-matrix(1,n,n)/n#Equation(2)
+  E_G<-eigen(GRM)
+  Q_G<-E_G$vectors
+  D_G<-E_G$values
+  D_G[D_G<0]<-0#LastEVmightbe-0
+  G_halve<-Q_G%*%diag(sqrt(D_G),nrow(Q_G),nrow(Q_G))%*%t(Q_G)
+  Cov.y.minus<-chol2inv(GRM*varg+diag(vare,n,n))
+  eBLUP.s<-varg*G_halve%*%Cov.y.minus%*%(phenos-mu)#formula(20)
+  eBLUPcov.s<-varg^2*G_halve%*%Cov.y.minus%*%G_halve-(varg^2/sum(Cov.y.minus))*G_halve%*%Cov.y.minus%*%matrix(1,n,n)%*%Cov.y.minus%*%G_halve#formula(21)
+  V<-varg#formula(19)
+  W<-V+t(eBLUP.s)%*%P%*%eBLUP.s/(n-1)-sum(diag(P%*%eBLUPcov.s))/(n-1)#formula(22)
+  return(c(V,W))
+}
+
+################################################################################
+#Genomicdata(phenotypesandmarkergenotypes)
+data(mice)
+data(wheat)
+#load("Arabidopsis1001genomes_1057lines_193697SNPs.Rdata")
+y.all<-list(mice.pheno$Obesity.BodyLength,wheat.Y[,1])#,phenogeno$pheno$FT10_mean)#Phenotypicvalues
+Ped.all<-list(mice.A,wheat.A)#,NA)#Pedigreematrices
+X.all<-list(mice.X,wheat.X)#,phenogeno$geno)#marker-genotypmatrices
+nr.datasets<-length(y.all)
+################################################################################
+#OutputVariables
+Variables<-c("eps","V_hat","h2_V","sum_V","h2_V_sum","W_hat","h2_W",
+"sum_W","h2_Wsum","Vstar_hat","Wstar_hat","Vstars_hat",
+"Wstars_hat")
+nr.variables<-length(Variables)
+result<-matrix(NA,nr.variables,nr.datasets)
+rownames(result)<-Variables
+colnames(result)<-c("Mice","Wheat")#,"Arabidopsis")
+################################################################################
+rm(mice.A,mice.pheno,mice.X,wheat.A,wheat.X,wheat.Y,#phenogeno,
+   wheat.sets,Variables,nr.variables)
+
+################################################################################
+################################################################################
+#Modelfitandestimationofgenomicvariances
+
+#Preliminaries
+y<-mice.pheno$Obesity.BodyLength#fixphenotype
+y.scaled<-y/sd(y)#yscaledtovarianceof1,seeequation(5)
+n<-length(y)
+ones<-matrix(1,nrow=n,ncol=1)
+P<-diag(1,n,n)-matrix(1,n,n)/n#Equation(2)
+X<-mice.X#fixmarker-genotypes
+p<-dim(X)[2]
+c<-sum(colMeans(X)*(1-colMeans(X)/2))#vanRadenc,seeequation(3)
+G<-P%*%tcrossprod(X)%*%P/c#equation(1)
+rm(X)
+############################################################################
+#FitgBLUPmodel
+lm.equi <- mmer(Y=y.scaled,X=ones,Z=list(A=list(K=G)),silent=TRUE,
+iters=50,tolpar=1e-7,tolparinv=1e-9)
+var.g.hat<-as.numeric(lm.equi$var.comp$A)#variancecomponentg
+var.e.hat<-as.numeric(lm.equi$var.comp$units)#variancecomp.eps
+mu.hat<-rep(lm.equi$beta.hat,n)#EstimateofIntercept
+g.hat<-as.vector(lm.equi$u.hat$A)#eBLUP,equation(6)
+cov.g.hat<-as.matrix(lm.equi$Var.u.hat$A$T1)#CovofeBLUP,equation(7)
+rm(lm.equi)
+#Genomicvariancesinthecurrentpopulation
+gv_cur<-GenVarCur(GRM=G,varg=var.g.hat,eBLUP=g.hat,eBLUPcov=cov.g.hat)
+V.hat<-gv_cur[1]
+h2.V<-V.hat#formula(10)
+sum.V<-V.hat+var.e.hat#formula(12)
+h2.V.sum<-V.hat/sum.V#formula(14)
+W.hat<-gv_cur[2]
+h2.W<-W.hat#(11)
+sum.W<-W.hat+var.e.hat#formula(13)
+h2.W.sum<-W.hat/sum.W#formula(15)
+#Genomicvariancesinthebasepopulation(viaPedigree)
+Ped<-mice.A
+if(!any(is.na(Ped))){
+gv_base_ped<-GenVarBase_Ped(PedMat=Ped,GRM=G,varg=var.g.hat,eBLUP=g.hat,eBLUPcov=cov.g.hat)
+V.hat.star<-gv_base_ped[1]
+W.hat.star<-gv_base_ped[2]
+}
+else{
+V.hat.star<-W.hat.star<-NA
+}
+#Genomicvariancesinthebasepopulation(viaGRM)
+gv_base_grm<-GenVarBase_GRM(GRM=G,phenos=y.scaled,mu=mu.hat,
+varg=var.g.hat,eBLUP=g.hat,eBLUPcov=cov.g.hat,
+vare=var.e.hat)
+V.hat.star.s<-gv_base_grm[1]
+W.hat.star.s<-gv_base_grm[2]
+##############################################################################
+result[,j]<-c(var.e.hat,V.hat,h2.V,sum.V,h2.V.sum,W.hat,h2.W,
+sum.W,h2.W.sum,V.hat.star,W.hat.star,V.hat.star.s,
+W.hat.star.s)
+rm(var.e.hat,V.hat,h2.V,sum.V,h2.V.sum,W.hat,h2.W,sum.W,h2.W.sum,
+V.hat.star,W.hat.star,V.hat.star.s,W.hat.star.s,y,y.scaled,var.g.hat,
+g.hat,cov.g.hat)
+
+Rprof(NULL)
