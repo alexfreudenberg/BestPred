@@ -46,7 +46,6 @@ GenVarBase_GRM<-function(GRM,phenos,mu,varg,eBLUP,eBLUPcov,vare){
 ################################################################################
 #Genomicdata(phenotypesandmarkergenotypes)
 data(mice)
-data(wheat)
 #load("Arabidopsis1001genomes_1057lines_193697SNPs.Rdata")
 y.all<-list(mice.pheno$Obesity.BodyLength,wheat.Y[,1])#,phenogeno$pheno$FT10_mean)#Phenotypicvalues
 Ped.all<-list(mice.A,wheat.A)#,NA)#Pedigreematrices
@@ -82,8 +81,8 @@ G<-P%*%tcrossprod(X)%*%P/c#equation(1)
 rm(X)
 ############################################################################
 #FitgBLUPmodel
-lm.equi <- mmer(Y=y.scaled,X=ones,Z=list(A=list(K=G)),silent=TRUE,
-iters=50,tolpar=1e-7,tolparinv=1e-9)
+lm.equi <- mmer(Y=y.scaled,X=ones,Z=list(A=list(K=G)),silent=FALSE,
+iters=1,tolpar=1e-7,tolparinv=1e-9)
 var.g.hat<-as.numeric(lm.equi$var.comp$A)#variancecomponentg
 var.e.hat<-as.numeric(lm.equi$var.comp$units)#variancecomp.eps
 mu.hat<-rep(lm.equi$beta.hat,n)#EstimateofIntercept
@@ -106,8 +105,7 @@ if(!any(is.na(Ped))){
 gv_base_ped<-GenVarBase_Ped(PedMat=Ped,GRM=G,varg=var.g.hat,eBLUP=g.hat,eBLUPcov=cov.g.hat)
 V.hat.star<-gv_base_ped[1]
 W.hat.star<-gv_base_ped[2]
-}
-else{
+}else{
 V.hat.star<-W.hat.star<-NA
 }
 #Genomicvariancesinthebasepopulation(viaGRM)
