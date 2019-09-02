@@ -42,33 +42,11 @@ GenVarBase_GRM<-function(GRM,phenos,mu,varg,eBLUP,eBLUPcov,vare){
   W<-V+t(eBLUP.s)%*%P%*%eBLUP.s/(n-1)-sum(diag(P%*%eBLUPcov.s))/(n-1)#formula(22)
   return(c(V,W))
 }
-
-################################################################################
-#Genomicdata(phenotypesandmarkergenotypes)
 data(mice)
-#load("Arabidopsis1001genomes_1057lines_193697SNPs.Rdata")
-y.all<-list(mice.pheno$Obesity.BodyLength,wheat.Y[,1])#,phenogeno$pheno$FT10_mean)#Phenotypicvalues
-Ped.all<-list(mice.A,wheat.A)#,NA)#Pedigreematrices
-X.all<-list(mice.X,wheat.X)#,phenogeno$geno)#marker-genotypmatrices
-nr.datasets<-length(y.all)
-################################################################################
-#OutputVariables
-Variables<-c("eps","V_hat","h2_V","sum_V","h2_V_sum","W_hat","h2_W",
-"sum_W","h2_Wsum","Vstar_hat","Wstar_hat","Vstars_hat",
-"Wstars_hat")
-nr.variables<-length(Variables)
-result<-matrix(NA,nr.variables,nr.datasets)
-rownames(result)<-Variables
-colnames(result)<-c("Mice","Wheat")#,"Arabidopsis")
-################################################################################
-rm(mice.A,mice.pheno,mice.X,wheat.A,wheat.X,wheat.Y,#phenogeno,
-   wheat.sets,Variables,nr.variables)
 
-################################################################################
-################################################################################
-#Modelfitandestimationofgenomicvariances
 
-#Preliminaries
+
+
 y<-mice.pheno$Obesity.BodyLength#fixphenotype
 y.scaled<-y/sd(y)#yscaledtovarianceof1,seeequation(5)
 n<-length(y)
@@ -115,7 +93,7 @@ vare=var.e.hat)
 V.hat.star.s<-gv_base_grm[1]
 W.hat.star.s<-gv_base_grm[2]
 ##############################################################################
-result[,j]<-c(var.e.hat,V.hat,h2.V,sum.V,h2.V.sum,W.hat,h2.W,
+result<-c(var.e.hat,V.hat,h2.V,sum.V,h2.V.sum,W.hat,h2.W,
 sum.W,h2.W.sum,V.hat.star,W.hat.star,V.hat.star.s,
 W.hat.star.s)
 rm(var.e.hat,V.hat,h2.V,sum.V,h2.V.sum,W.hat,h2.W,sum.W,h2.W.sum,
